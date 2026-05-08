@@ -56,10 +56,10 @@ use teeny_triton::triton::{
 /// Grid: `(N_CTX, BH, 1)`.  `HEAD_DIM` must be even and a power of two.
 #[kernel]
 pub fn rope_forward<T: Triton, const HEAD_DIM: i32>(
-    x_ptr: T::Pointer<f32>,
-    y_ptr: T::Pointer<f32>,
-    n_ctx: i32,
-    rope_base: f32,
+    x_ptr:        T::Pointer<f32>,
+    y_ptr:        T::Pointer<f32>,
+    n_ctx:        i32,
+    ln_rope_base: f32,  // ln(rope_base), pre-computed by caller
 ) where
     T::I32Tensor: Tensor<i32, 1>,
     T::I32Tensor: Comparison<i32, BoolTensor = T::BoolTensor>,
@@ -69,28 +69,28 @@ pub fn rope_forward<T: Triton, const HEAD_DIM: i32>(
     let pid_bh = T::program_id(Axis::Y);  // batch * head   [0, BH)
 
     let row_base = pid_bh * n_ctx * HEAD_DIM + pid_pos * HEAD_DIM;
-    let half = HEAD_DIM / 2;
 
     // Stride-2 offsets for the two interleaved halves.
-    let k = T::arange(0, half);              // [0, 1, …, half-1]  I32Tensor
-    let even_offs = k * 2 + row_base;        // x[2k]
-    let odd_offs = k * 2 + 1 + row_base;    // x[2k+1]
+    // HEAD_DIM is a const generic so HEAD_DIM/2 folds to a compile-time
+    // constant, avoiding a named MIR local that teenyc cannot copy.
+    let k = T::arange(0, HEAD_DIM / 2);     // [0, 1, …, half-1]  I32Tensor
+    let even_offs = k * 2 + row_base;       // x[2k]
+    let odd_offs = k * 2 + 1 + row_base;   // x[2k+1]
 
     let x_even = T::load(x_ptr.add_offsets(even_offs), None, None, &[], None, None, None, false);
     let x_odd  = T::load(x_ptr.add_offsets(odd_offs),  None, None, &[], None, None, None, false);
 
-    // Float index k_f: [0.0, 1.0, …, half-1.0] via cumsum.
-    let ones  = T::full::<f32>(&[half], 1.0_f32);
-    let k_f   = T::cumsum::<f32>(ones, 0, false) - ones; // [0, 1, …]
-
-    // θ_k = pos · base^(-2k/d) = pos · exp(-k_f · 2/d · ln(base))
-    let ln_base   = T::full::<f32>(&[half], rope_base.ln());
-    let dim_scale = T::full::<f32>(&[half], 2.0_f32 / HEAD_DIM as f32);
-    let pos_f     = T::full::<f32>(&[half], pid_pos as f32);
-    let theta     = pos_f * T::exp(-(k_f * dim_scale * ln_base));
-
-    let cos_t = T::cos(theta);
-    let sin_t = T::sin(theta);
+    // θ_k = pos · exp(-k · 2·ln(base) / HEAD_DIM)
+    // All sub-expressions are inlined (no named f32 locals reused) so the
+    // teenyc MLIR backend never emits a MIR `copy` node.
+    let cos_t = T::cos(
+        T::full::<f32>(&[HEAD_DIM / 2], pid_pos as f32)
+            * T::exp(T::arange_f32(0, HEAD_DIM / 2) * T::full::<f32>(&[HEAD_DIM / 2], -2.0_f32 * ln_rope_base / HEAD_DIM as f32))
+    );
+    let sin_t = T::sin(
+        T::full::<f32>(&[HEAD_DIM / 2], pid_pos as f32)
+            * T::exp(T::arange_f32(0, HEAD_DIM / 2) * T::full::<f32>(&[HEAD_DIM / 2], -2.0_f32 * ln_rope_base / HEAD_DIM as f32))
+    );
 
     T::store(y_ptr.add_offsets(even_offs), x_even * cos_t - x_odd * sin_t, None, &[], None, None);
     T::store(y_ptr.add_offsets(odd_offs),  x_even * sin_t + x_odd * cos_t, None, &[], None, None);
@@ -104,10 +104,10 @@ pub fn rope_forward<T: Triton, const HEAD_DIM: i32>(
 #[cfg(feature = "training")]
 #[kernel]
 pub fn rope_backward<T: Triton, const HEAD_DIM: i32>(
-    dy_ptr:  T::Pointer<f32>,
-    dx_ptr:  T::Pointer<f32>,
-    n_ctx:   i32,
-    rope_base: f32,
+    dy_ptr:       T::Pointer<f32>,
+    dx_ptr:       T::Pointer<f32>,
+    n_ctx:        i32,
+    ln_rope_base: f32,  // ln(rope_base), pre-computed by caller
 ) where
     T::I32Tensor: Tensor<i32, 1>,
     T::I32Tensor: Comparison<i32, BoolTensor = T::BoolTensor>,
@@ -117,24 +117,22 @@ pub fn rope_backward<T: Triton, const HEAD_DIM: i32>(
     let pid_bh  = T::program_id(Axis::Y);
 
     let row_base = pid_bh * n_ctx * HEAD_DIM + pid_pos * HEAD_DIM;
-    let half = HEAD_DIM / 2;
 
-    let k = T::arange(0, half);
+    let k = T::arange(0, HEAD_DIM / 2);
     let even_offs = k * 2 + row_base;
     let odd_offs  = k * 2 + 1 + row_base;
 
     let dy_even = T::load(dy_ptr.add_offsets(even_offs), None, None, &[], None, None, None, false);
     let dy_odd  = T::load(dy_ptr.add_offsets(odd_offs),  None, None, &[], None, None, None, false);
 
-    let ones  = T::full::<f32>(&[half], 1.0_f32);
-    let k_f   = T::cumsum::<f32>(ones, 0, false) - ones;
-    let ln_base   = T::full::<f32>(&[half], rope_base.ln());
-    let dim_scale = T::full::<f32>(&[half], 2.0_f32 / HEAD_DIM as f32);
-    let pos_f     = T::full::<f32>(&[half], pid_pos as f32);
-    let theta     = pos_f * T::exp(-(k_f * dim_scale * ln_base));
-
-    let cos_t = T::cos(theta);
-    let sin_t = T::sin(theta);
+    let cos_t = T::cos(
+        T::full::<f32>(&[HEAD_DIM / 2], pid_pos as f32)
+            * T::exp(T::arange_f32(0, HEAD_DIM / 2) * T::full::<f32>(&[HEAD_DIM / 2], -2.0_f32 * ln_rope_base / HEAD_DIM as f32))
+    );
+    let sin_t = T::sin(
+        T::full::<f32>(&[HEAD_DIM / 2], pid_pos as f32)
+            * T::exp(T::arange_f32(0, HEAD_DIM / 2) * T::full::<f32>(&[HEAD_DIM / 2], -2.0_f32 * ln_rope_base / HEAD_DIM as f32))
+    );
 
     // Inverse rotation: R(-θ) applied to dy.
     T::store(dx_ptr.add_offsets(even_offs),  dy_even * cos_t + dy_odd * sin_t, None, &[], None, None);
@@ -188,12 +186,12 @@ impl RuntimeOp for RopeRtOp {
         _output_row_stride: i32,
         visitor: &mut dyn ArgVisitor,
     ) {
-        // x_ptr, y_ptr, n_ctx, rope_base
+        // x_ptr, y_ptr, n_ctx, ln_rope_base
         let n_ctx = output_shape[1] as i32;
         visitor.visit_ptr(inputs[0].0);
         visitor.visit_ptr(output);
         visitor.visit_i32(n_ctx);
-        visitor.visit_f32(self.rope_base);
+        visitor.visit_f32(self.rope_base.ln());
     }
 
     // Grid: (N_CTX, BH, 1)
@@ -225,7 +223,7 @@ impl RuntimeOp for RopeRtOp {
         visitor.visit_ptr(grad_output);    // dy_ptr
         visitor.visit_ptr(grad_inputs[0]); // dx_ptr
         visitor.visit_i32(n_ctx);
-        visitor.visit_f32(self.rope_base);
+        visitor.visit_f32(self.rope_base.ln());
     }
 
     #[cfg(feature = "training")]

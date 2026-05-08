@@ -205,7 +205,7 @@ mod cuda_tests {
             x_buf.as_device_ptr() as *mut f32,
             y_buf.as_device_ptr() as *mut f32,
             S as i32,
-            ROPE_BASE,
+            ROPE_BASE.ln(),   // kernel takes ln(rope_base), not rope_base
         ))?;
 
         let mut y_host = vec![0.0f32; N];
