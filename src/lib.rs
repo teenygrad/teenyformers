@@ -30,7 +30,9 @@ pub mod decoder;
 pub mod encoder;
 pub mod kernels;
 pub mod layers;
+pub mod llama;
 pub mod transformer;
 
-pub use config::TransformerConfig;
+pub use config::{LlamaConfig, TransformerConfig};
+pub use llama::Llama;
 pub use transformer::Transformer;

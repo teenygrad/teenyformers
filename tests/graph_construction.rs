@@ -22,9 +22,9 @@
 
 use teeny_core::graph::{DtypeRepr, Op, SymTensor};
 use teenyformers::{
-    TransformerConfig,
+    LlamaConfig, TransformerConfig,
     layers::{
-        AttentionKind, DecoderBlock, EncoderBlock, FeedForward, MultiHeadAttention,
+        AttentionKind, DecoderBlock, EncoderBlock, FeedForward, LlamaBlock, MultiHeadAttention,
         TokenEmbedding,
     },
 };
@@ -143,6 +143,49 @@ fn test_output_proj_shape() {
     let emb = TokenEmbedding::new(vocab, d_model);
     let logits = emb.output_proj(input_2d(seq, d_model));
     assert_eq!(logits.shape, vec![Some(seq), Some(vocab)]);
+}
+
+// ── LlamaConfig ──────────────────────────────────────────────────────────────
+
+#[test]
+fn test_llama_config_d_ff() {
+    let cfg = LlamaConfig { d_model: 4096, ..Default::default() };
+    assert_eq!(cfg.d_ff() % 64, 0);
+    // 8/3 * 4096 ≈ 10922.7 → ceil to nearest 64 multiple
+    assert_eq!(cfg.d_ff(), 10944);
+}
+
+#[test]
+fn test_llama_config_head_dim() {
+    let cfg = LlamaConfig { d_model: 4096, n_heads: 32, ..Default::default() };
+    assert_eq!(cfg.head_dim(), 128);
+}
+
+// ── LlamaBlock ────────────────────────────────────────────────────────────────
+
+#[test]
+fn test_llama_block_shape() {
+    let cfg = LlamaConfig { d_model: 64, n_heads: 4, n_layers: 2, ..Default::default() };
+    let block = LlamaBlock::new(cfg.d_model, cfg.n_heads, cfg.d_ff(), cfg.rope_base, cfg.eps);
+    let out = block.forward(input_2d(8, cfg.d_model));
+    assert_eq!(out.shape, vec![Some(8), Some(cfg.d_model)]);
+}
+
+// ── Llama model ───────────────────────────────────────────────────────────────
+
+#[test]
+fn test_llama_forward_shape() {
+    let cfg = LlamaConfig {
+        d_model:   64,
+        n_heads:   4,
+        n_layers:  2,
+        vocab_size: 1000,
+        ..Default::default()
+    };
+    let model = teenyformers::Llama::new(&cfg);
+    let ids = input_1d(7);
+    let logits = model.forward(ids);
+    assert_eq!(logits.shape, vec![Some(7), Some(cfg.vocab_size)]);
 }
 
 // ── Full transformer ──────────────────────────────────────────────────────────

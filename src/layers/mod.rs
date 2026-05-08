@@ -19,12 +19,14 @@ pub mod decoder_block;
 pub mod embedding;
 pub mod encoder_block;
 pub mod ffn;
+pub mod llama_block;
 
 pub use attention::{AttentionKind, MultiHeadAttention};
 pub use decoder_block::DecoderBlock;
 pub use embedding::TokenEmbedding;
 pub use encoder_block::EncoderBlock;
 pub use ffn::FeedForward;
+pub use llama_block::LlamaBlock;
 
 use teeny_core::graph::{Op, Shape, SymTensor};
 

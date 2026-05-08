@@ -33,6 +33,19 @@ fn sm90_target() -> Target {
     Target::new(Capability::Sm90)
 }
 
+const BLOCK_D: i32 = 16;
+
+// ── TokenEmbed ────────────────────────────────────────────────────────────────
+
+#[test]
+fn test_token_embed_forward_source() -> anyhow::Result<()> {
+    dotenv().ok();
+    let kernel = teenyformers::kernels::token_embed::TokenEmbedForward::new(BLOCK_D);
+    compile_kernel(&kernel, &sm90_target(), true)?;
+    assert_debug_snapshot!("token_embed_forward_source", kernel.source());
+    Ok(())
+}
+
 // ── SwiGLU ───────────────────────────────────────────────────────────────────
 
 #[test]

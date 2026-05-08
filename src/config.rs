@@ -55,6 +55,59 @@ impl TransformerConfig {
     }
 }
 
+/// Configuration for a decoder-only (Llama-style) transformer.
+///
+/// `d_ff` (SwiGLU intermediate width) is derived: `ceil(8/3 · d_model / 64) · 64`.
+#[derive(Debug, Clone)]
+pub struct LlamaConfig {
+    /// Token embedding / hidden dimension.
+    pub d_model: usize,
+    /// Number of attention heads.  Must divide `d_model`.
+    pub n_heads: usize,
+    /// Number of transformer blocks.
+    pub n_layers: usize,
+    /// Vocabulary size.
+    pub vocab_size: usize,
+    /// Maximum sequence length supported by RoPE.
+    pub max_seq_len: usize,
+    /// RMSNorm stability constant (default 1e-5).
+    pub eps: f64,
+    /// RoPE base frequency (default 10 000.0 — original LLaMA/GPT-NeoX).
+    pub rope_base: f32,
+}
+
+impl LlamaConfig {
+    /// Head dimension (`d_model / n_heads`).
+    pub fn head_dim(&self) -> usize {
+        self.d_model / self.n_heads
+    }
+
+    /// SwiGLU intermediate width: `ceil(8/3 · d_model / 64) · 64`.
+    pub fn d_ff(&self) -> usize {
+        let raw = (8 * self.d_model).div_ceil(3);
+        raw.div_ceil(64) * 64
+    }
+
+    /// Attention softmax scale `1 / √head_dim`.
+    pub fn softmax_scale(&self) -> f32 {
+        1.0 / (self.head_dim() as f32).sqrt()
+    }
+}
+
+impl Default for LlamaConfig {
+    fn default() -> Self {
+        Self {
+            d_model:     4096,
+            n_heads:     32,
+            n_layers:    32,
+            vocab_size:  32_000,
+            max_seq_len: 4096,
+            eps:         1e-5,
+            rope_base:   10_000.0,
+        }
+    }
+}
+
 impl Default for TransformerConfig {
     fn default() -> Self {
         Self {

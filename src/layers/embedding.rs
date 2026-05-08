@@ -122,11 +122,10 @@ impl CustomOp for TokenEmbedOp {
     fn as_any(&self) -> &dyn Any { self }
 
     fn lower(&self) -> Option<(String, String, String, Arc<dyn RuntimeOp>)> {
+        use crate::kernels::TokenEmbedForward;
+        let k = TokenEmbedForward::new(1024); // BLOCK_D = 1024
         let rop = TokenEmbedRuntimeOp { vocab_size: self.vocab_size, d_model: self.d_model };
-        // Reuse the linear forward source for the entry-point wrapper; the
-        // executor calls our RuntimeOp::pack_args, not the inner kernel.
-        let src = String::new(); // executor uses RuntimeOp directly
-        Some(("token_embed".to_string(), src, "entry_point".to_string(), Arc::new(rop)))
+        Some((k.name.to_string(), k.source.clone(), "entry_point".to_string(), Arc::new(rop)))
     }
 }
 

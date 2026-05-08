@@ -18,10 +18,12 @@ pub mod flash_attn2;
 pub mod fused_add_rmsnorm;
 pub mod rope;
 pub mod swiglu;
+pub mod token_embed;
 pub mod transpose_heads;
 
 pub use flash_attn2::{CausalFlashAttn2Op, FlashAttn2Op};
 pub use fused_add_rmsnorm::FusedAddRmsnormOp;
 pub use rope::RopeOp;
 pub use swiglu::SwigluOp;
+pub use token_embed::TokenEmbedForward;
 pub use transpose_heads::{MergeHeadsOp, TransposeHeadsOp};
