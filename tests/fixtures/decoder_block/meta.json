@@ -1,0 +1,58 @@
+{
+  "d_model": 32,
+  "n_heads": 4,
+  "d_ff": 48,
+  "seq_tgt": 5,
+  "seq_enc": 7,
+  "weights": {
+    "norm1.weight": [
+      32
+    ],
+    "norm2.weight": [
+      32
+    ],
+    "norm3.weight": [
+      32
+    ],
+    "wqs.weight": [
+      32,
+      32
+    ],
+    "wks.weight": [
+      32,
+      32
+    ],
+    "wvs.weight": [
+      32,
+      32
+    ],
+    "wos.weight": [
+      32,
+      32
+    ],
+    "wqc.weight": [
+      32,
+      32
+    ],
+    "wkc.weight": [
+      32,
+      32
+    ],
+    "wvc.weight": [
+      32,
+      32
+    ],
+    "woc.weight": [
+      32,
+      32
+    ],
+    "wgate_up.weight": [
+      96,
+      32
+    ],
+    "wdown.weight": [
+      32,
+      48
+    ]
+  }
+}

@@ -1,0 +1,63 @@
+[package]
+name = "teenyformers"
+version = "0.1.0"
+edition = "2024"
+description = "Rust implementation of transformers."
+license = "Apache-2.0"
+repository = "https://github.com/teenygrad/teenyformers"
+homepage = "https://github.com/teenygrad/teenyformers"
+documentation = "https://docs.rs/teenyformers"
+readme = "README.md"
+keywords = ["transformers", "llms", "machine-learning", "deep-learning"]
+categories = ["transformers", "llms", "machine-learning", "deep-learning"]
+
+[package.metadata.docs.rs]
+all-features = true
+
+[features]
+default = ["cuda", "training"]
+cuda = ["teeny-cuda", "teeny-compiler"]
+training = ["teeny-kernels/training", "teeny-core/training"]
+
+[dependencies]
+teeny-core     = { version = "0.1", features = ["std"] }
+teeny-kernels  = "0.1"
+teeny-macros   = "0.1"
+teeny-triton   = "0.1"
+teeny-data     = "0.1"
+teeny-cuda     = { version = "0.1", optional = true }
+teeny-compiler = { version = "0.1", optional = true }
+anyhow         = { version = "1.0", default-features = false }
+
+[dev-dependencies]
+serial_test    = "3"
+teeny-compiler = "0.1"
+dotenv         = "0.15"
+insta          = "1"
+tokio          = { version = "1", features = ["full"] }
+reqwest        = { version = "0.13", features = ["stream"] }
+indicatif      = "0.18"
+serde          = { version = "1", features = ["derive"] }
+clap           = { version = "4", features = ["derive"] }
+toml           = "0.8"
+zip            = "2"
+futures-util   = "0.3"
+eframe         = { version = "0.29", features = ["x11"] }
+image          = "0.25"
+
+# [patch.crates-io] overrides all teenygrad crates with local path versions.
+# Remove this section once the crates are published to crates.io.
+[patch.crates-io]
+teeny-core     = { path = "../teenygrad/core/teeny-core" }
+teeny-fxgraph  = { path = "../teenygrad/support/teeny-fxgraph" }
+teeny-kernels  = { path = "../teenygrad/kernels/teeny-kernels" }
+teeny-triton   = { path = "../teenygrad/kernels/teeny-triton" }
+teeny-compiler = { path = "../teenygrad/compiler/teeny-compiler" }
+teeny-macros   = { path = "../teenygrad/macros/teeny-macros" }
+teeny-cuda     = { path = "../teenygrad/drivers/teeny-cuda" }
+teeny-cache    = { path = "../teenygrad/utilities/teeny-cache" }
+teeny-data     = { path = "../teenygrad/utilities/teeny-data" }
+teeny-http     = { path = "../teenygrad/utilities/teeny-http" }
+teeny-nlp      = { path = "../teenygrad/utilities/teeny-nlp" }
+teeny-onnx     = { path = "../teenygrad/support/teeny-onnx" }
+teeny-torch    = { path = "../teenygrad/support/teeny-torch" }
