@@ -31,6 +31,8 @@ pub mod encoder;
 pub mod kernels;
 pub mod layers;
 pub mod llama;
+#[cfg(all(feature = "cuda", feature = "safetensors"))]
+pub mod loader;
 pub mod transformer;
 
 pub use config::{LlamaConfig, TransformerConfig};

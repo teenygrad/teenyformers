@@ -29,7 +29,7 @@
 //! Weight tying: the output projection (`lm_head`) shares weights with the
 //! token embedding table.
 
-use teeny_core::graph::SymTensor;
+use teeny_core::{graph::SymTensor, name_scope::name_scope};
 
 use crate::{
     config::LlamaConfig,
@@ -63,13 +63,20 @@ impl Llama {
     ///
     /// Returns `logits [S, vocab_size]`.
     pub fn forward(&self, ids: SymTensor) -> SymTensor {
-        let mut x = self.embedding.forward(ids);
+        // "model" scope covers everything except lm_head (which is top-level in HF checkpoints).
+        let hidden = {
+            let _g = name_scope("model");
 
-        for block in &self.layers {
-            x = block.forward(x);
-        }
+            let mut x = { let _g = name_scope("embed_tokens"); self.embedding.forward(ids) };
 
-        let x = sym_rmsnorm(x, self.d_model, self.eps);
-        self.embedding.output_proj(x)
+            for (i, block) in self.layers.iter().enumerate() {
+                let _g = name_scope(format!("layers.{i}"));
+                x = block.forward(x);
+            }
+
+            { let _g = name_scope("norm"); sym_rmsnorm(x, self.d_model, self.eps) }
+        };
+
+        { let _g = name_scope("lm_head"); self.embedding.output_proj(hidden) }
     }
 }

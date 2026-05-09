@@ -26,7 +26,7 @@
 //!
 //! `d_ff = ceil(8/3 * d_model / 64) * 64`  (LLaMA rounding)
 
-use teeny_core::graph::SymTensor;
+use teeny_core::{graph::SymTensor, name_scope::name_scope};
 
 use crate::kernels::SwigluOp;
 
@@ -46,12 +46,12 @@ impl FeedForward {
     /// Record the FFN computation: `[S, D] → [S, D]`.
     pub fn forward(&self, x: SymTensor) -> SymTensor {
         // Fused gate+up projection: [S, D] → [S, 2*d_ff]
-        let z = sym_linear(x, self.d_model, 2 * self.d_ff);
+        let z = { let _g = name_scope("gate_up_proj"); sym_linear(x, self.d_model, 2 * self.d_ff) };
 
         // SwiGLU: [S, 2*d_ff] → [S, d_ff]
         let h = z.record_custom(SwigluOp::custom_data(), &[], None);
 
         // Down projection: [S, d_ff] → [S, D]
-        sym_linear(h, self.d_ff, self.d_model)
+        { let _g = name_scope("down_proj"); sym_linear(h, self.d_ff, self.d_model) }
     }
 }

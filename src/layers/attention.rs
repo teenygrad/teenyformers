@@ -26,7 +26,7 @@
 //! [S, D] <--(Wo)-- [S, D] <--MergeHeads-- [H, S, D_head]
 //! ```
 
-use teeny_core::graph::SymTensor;
+use teeny_core::{graph::SymTensor, name_scope::name_scope};
 
 use crate::kernels::{CausalFlashAttn2Op, FlashAttn2Op, MergeHeadsOp, RopeOp, TransposeHeadsOp};
 
@@ -89,9 +89,9 @@ impl MultiHeadAttention {
         let scale = 1.0_f32 / (self.head_dim as f32).sqrt();
 
         // Linear projections: [S, D] → [S, D]
-        let q = sym_linear(q_in, self.d_model, self.d_model);
-        let k = sym_linear(k_in, self.d_model, self.d_model);
-        let v = sym_linear(v_in, self.d_model, self.d_model);
+        let q = { let _g = name_scope("q_proj"); sym_linear(q_in, self.d_model, self.d_model) };
+        let k = { let _g = name_scope("k_proj"); sym_linear(k_in, self.d_model, self.d_model) };
+        let v = { let _g = name_scope("v_proj"); sym_linear(v_in, self.d_model, self.d_model) };
 
         // Transpose heads: [S, D] → [H, S, D_head]
         let q = q.record_custom(
@@ -144,6 +144,6 @@ impl MultiHeadAttention {
         );
 
         // Output projection
-        sym_linear(o, self.d_model, self.d_model)
+        { let _g = name_scope("o_proj"); sym_linear(o, self.d_model, self.d_model) }
     }
 }

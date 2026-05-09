@@ -23,7 +23,7 @@
 //!
 //! No cross-attention; causal masking only.
 
-use teeny_core::graph::SymTensor;
+use teeny_core::{graph::SymTensor, name_scope::name_scope};
 
 use super::{AttentionKind, FeedForward, MultiHeadAttention, sym_add, sym_rmsnorm};
 
@@ -54,13 +54,13 @@ impl LlamaBlock {
     /// Forward: `x [S, D]` → `out [S, D]`.
     pub fn forward(&self, x: SymTensor) -> SymTensor {
         // Pre-norm causal self-attention + residual
-        let norm1 = sym_rmsnorm(x.clone(), self.d_model, self.eps);
-        let attn  = self.self_attn.self_attn(norm1);
+        let norm1 = { let _g = name_scope("input_layernorm"); sym_rmsnorm(x.clone(), self.d_model, self.eps) };
+        let attn  = { let _g = name_scope("self_attn"); self.self_attn.self_attn(norm1) };
         let x2    = sym_add(&x, &attn);
 
         // Pre-norm SwiGLU FFN + residual
-        let norm2   = sym_rmsnorm(x2.clone(), self.d_model, self.eps);
-        let ffn_out = self.ffn.forward(norm2);
+        let norm2   = { let _g = name_scope("post_attention_layernorm"); sym_rmsnorm(x2.clone(), self.d_model, self.eps) };
+        let ffn_out = { let _g = name_scope("mlp"); self.ffn.forward(norm2) };
         sym_add(&x2, &ffn_out)
     }
 }
